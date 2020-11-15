@@ -28,10 +28,13 @@ public class Main {
 
 	public static void main(String[] args)
 	{
-		String ServerAddress = "http://54.93.36.163:8080";
-		String outLoginToken;
+		String serverAddress = "http://54.93.36.163:8080";
+		String outLoginToken = null;
 		RSAPublicKey rsaServerPublicKey = null;
 		RSAKeyPair ourKeyPair;
+		String login = "Jessa3";
+		String password = "1234";
+		String receiver = "receiverName";
 
 		ourKeyPair = RSAKeyPairGenerator.generateKeyPair(256);
 
@@ -48,21 +51,24 @@ public class Main {
             writeToConsole("5. - getAllUSers");
             writeToConsole("6. - getUsersPublicKey");
             writeToConsole("7. - register");
+            writeToConsole("7. - sendMessage");
             writeToConsole("0. - Exit");
             wybor = scan.nextLine();
             switch (wybor) {
                 case "1":
-                	rsaServerPublicKey = GetServerPublicKey(ServerAddress);
+                	if(serverAddress != null)
+                		rsaServerPublicKey = GetServerPublicKey(serverAddress);
                     break;
                 case "2":
 
                     break;
                 case "3":
-                	if(rsaServerPublicKey != null)
-                		outLoginToken = Login(ServerAddress, rsaServerPublicKey, ourKeyPair);
+                	if(serverAddress != null && rsaServerPublicKey != null && ourKeyPair != null && login != null && password != null)
+                		outLoginToken = Login(serverAddress, rsaServerPublicKey, ourKeyPair, login, password);
                     break;
                 case "4":
-
+                	if(serverAddress != null && outLoginToken != null && rsaServerPublicKey != null)
+                		Logout(serverAddress, outLoginToken, rsaServerPublicKey);
                     break;
                 case "5":
 
@@ -71,7 +77,12 @@ public class Main {
 
                     break;
                 case "7":
-                    SendHTTPRequest("POST", "http://54.93.36.163:8080/auth/register", "{'id': 1, 'name': 'Jessa3'}");
+                	if(serverAddress != null && rsaServerPublicKey != null && ourKeyPair != null && login != null && password != null)
+                		Register(serverAddress, rsaServerPublicKey, ourKeyPair, login, password);
+                    break;
+                case "8":
+                	if(serverAddress != null && rsaServerPublicKey != null && outLoginToken != null && receiver != null)
+                		SendMessage(serverAddress, rsaServerPublicKey, outLoginToken, receiver, " This is my message");
                     break;
                 case "0":
 
@@ -82,14 +93,48 @@ public class Main {
         }
 	}
 
+	private static void SendMessage(String aAddress, RSAPublicKey aRsaSeverPublicKey, String aToken, String aReceiver, String aMesssage)
+	{
+		Encoder encoder = new Encoder(aRsaSeverPublicKey);
 
-	public static String Login(String aAddress, RSAPublicKey rsaSeverPublicKey, RSAKeyPair aOurKeyPair)
+		String json = 	 "{'token' : '" 	+ aToken + "',"
+						+"'messsage': '"  	+ aMesssage + "',"
+						+"'receiver': '"  	+ aReceiver + "'}";
+		String encodedJson = encoder.encryptMessage(json);
+
+		SendHTTPRequest("POST", aAddress + "/auth/register", encodedJson);
+	}
+
+	private static void Register(String aAddress, RSAPublicKey aRsaSeverPublicKey, RSAKeyPair aOurKeyPair, String aLogin, String aPasssword)
+	{
+		Encoder encoder = new Encoder(aRsaSeverPublicKey);
+
+		String json = 	 "{'login' : '" 	+ aLogin + "',"
+						+"'password': '"  	+ aPasssword + "',"
+						+"'e': '"  			+ aOurKeyPair.getPublicKey().getE().toString() + "',"
+						+"'n': '" 			+ aOurKeyPair.getPublicKey().getN().toString()+"'}";
+		String encodedJson = encoder.encryptMessage(json);
+
+		SendHTTPRequest("POST", aAddress + "/auth/register", encodedJson);
+	}
+
+	private static void Logout(String aAddress, String aToken, RSAPublicKey aRsaSeverPublicKey)
+	{
+		Encoder encoder = new Encoder(aRsaSeverPublicKey);
+
+		String json = "{'token': '"  + aToken + "'}";
+		String encodedJson = encoder.encryptMessage(json);
+
+		SendHTTPRequest("GET", aAddress + "/auth/logout", encodedJson);
+	}
+
+	private static String Login(String aAddress, RSAPublicKey aRsaSeverPublicKey, RSAKeyPair aOurKeyPair, String aLogin, String aPasssword)
 	{
 		RSAPrivateKey rsaPrivateKey= aOurKeyPair.getPrivateKey();
 		Decoder decoder = new Decoder(rsaPrivateKey);
-		Encoder encoder = new Encoder(rsaSeverPublicKey);
+		Encoder encoder = new Encoder(aRsaSeverPublicKey);
 
-		String json = "{'login': 'Jessa3', 'password': '1234'}";
+		String json = "{'login': '"+ aLogin +"', 'password': '" + aPasssword +"'}";
 		String encodedJson = encoder.encryptMessage(json);
 
 		String encodedResponse = SendHTTPRequest("POST", aAddress + "/auth/login", encodedJson);
@@ -101,8 +146,7 @@ public class Main {
 		return map.get("token")[0];
 	}
 
-
-	public static RSAPublicKey GetServerPublicKey(String aAddress)
+	private static RSAPublicKey GetServerPublicKey(String aAddress)
 	{
 		String response = SendHTTPRequest("GET", aAddress + "/auth/key", null);
 		System.out.println(response);
@@ -112,7 +156,7 @@ public class Main {
 		return new RSAPublicKey(new BigInteger(map.get("e")[0]), new BigInteger(map.get("n")[0]));
 	}
 
-	public static String SendHTTPRequest(String aType, String aAddress, String aJson)
+	private static String SendHTTPRequest(String aType, String aAddress, String aJson)
 	{
 		String targetURL = aAddress;
 		String urlParameters = aJson;
@@ -131,9 +175,6 @@ public class Main {
 		    connection.setRequestProperty("Content-Language", "en-US");
 		    connection.setRequestProperty("Accept", "*/*");
 		    connection.setRequestProperty("Accept-Encoding", "gzip, deflate");
-
-		    //connection.setUseCaches(false);
-
 
 		    //Send request
 		    if(aJson != null && aType.equals("GET") == false)
@@ -187,15 +228,6 @@ public class Main {
 			e.printStackTrace();
 		}
 
-//		// Json to map
-//		ObjectMapper mapper = new ObjectMapper();
-//		Map<String, Object> map = new HashMap<String, Object>();
-//		try {
-//			map = mapper.readValue(json, Map.class);
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
 		return map;
 	}
 
