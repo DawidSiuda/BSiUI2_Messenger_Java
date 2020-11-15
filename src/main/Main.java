@@ -35,6 +35,7 @@ public class Main {
 		String login = "Jessa3";
 		String password = "1234";
 		String receiver = "receiverName";
+		Map<String, RSAPublicKey> keysOfReceivers= new HashMap<String, RSAPublicKey>();
 
 		ourKeyPair = RSAKeyPairGenerator.generateKeyPair(256);
 
@@ -81,8 +82,8 @@ public class Main {
                 		Register(serverAddress, rsaServerPublicKey, ourKeyPair, login, password);
                     break;
                 case "8":
-                	if(serverAddress != null && rsaServerPublicKey != null && outLoginToken != null && receiver != null)
-                		SendMessage(serverAddress, rsaServerPublicKey, outLoginToken, receiver, " This is my message");
+                	if(serverAddress != null && rsaServerPublicKey != null && outLoginToken != null && receiver != null && keysOfReceivers != null)
+                		SendMessage(serverAddress, rsaServerPublicKey, outLoginToken, receiver, keysOfReceivers.get(receiver), " This is my message");
                     break;
                 case "0":
 
@@ -93,26 +94,29 @@ public class Main {
         }
 	}
 
-	private static void SendMessage(String aAddress, RSAPublicKey aRsaSeverPublicKey, String aToken, String aReceiver, String aMesssage)
+	private static void SendMessage(String aAddress, RSAPublicKey aRsaSeverPublicKey, String aToken, String aReceiver, RSAPublicKey aReceiverKey, String aMesssage)
 	{
-		Encoder encoder = new Encoder(aRsaSeverPublicKey);
 
 		String json = 	 "{'token' : '" 	+ aToken + "',"
 						+"'messsage': '"  	+ aMesssage + "',"
 						+"'receiver': '"  	+ aReceiver + "'}";
-		String encodedJson = encoder.encryptMessage(json);
+		Encoder encoderForReceiver = new Encoder(aReceiverKey);
+		String encodedJsonForReceiver = encoderForReceiver.encryptMessage(json);
 
-		SendHTTPRequest("POST", aAddress + "/auth/register", encodedJson);
+		Encoder encoderForServer = new Encoder(aRsaSeverPublicKey);
+		String encodedJsonForServer = encoderForServer.encryptMessage(encodedJsonForReceiver);
+
+		SendHTTPRequest("POST", aAddress + "/auth/register", encodedJsonForServer);
 	}
 
 	private static void Register(String aAddress, RSAPublicKey aRsaSeverPublicKey, RSAKeyPair aOurKeyPair, String aLogin, String aPasssword)
 	{
-		Encoder encoder = new Encoder(aRsaSeverPublicKey);
-
 		String json = 	 "{'login' : '" 	+ aLogin + "',"
 						+"'password': '"  	+ aPasssword + "',"
 						+"'e': '"  			+ aOurKeyPair.getPublicKey().getE().toString() + "',"
 						+"'n': '" 			+ aOurKeyPair.getPublicKey().getN().toString()+"'}";
+
+		Encoder encoder = new Encoder(aRsaSeverPublicKey);
 		String encodedJson = encoder.encryptMessage(json);
 
 		SendHTTPRequest("POST", aAddress + "/auth/register", encodedJson);
@@ -120,9 +124,9 @@ public class Main {
 
 	private static void Logout(String aAddress, String aToken, RSAPublicKey aRsaSeverPublicKey)
 	{
-		Encoder encoder = new Encoder(aRsaSeverPublicKey);
-
 		String json = "{'token': '"  + aToken + "'}";
+
+		Encoder encoder = new Encoder(aRsaSeverPublicKey);
 		String encodedJson = encoder.encryptMessage(json);
 
 		SendHTTPRequest("GET", aAddress + "/auth/logout", encodedJson);
